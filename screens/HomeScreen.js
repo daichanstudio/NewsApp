@@ -1,5 +1,5 @@
-import React, {useState, useEffect} from 'react';
-import {StyleSheet, FlatList, SafeAreaView} from 'react-native';
+import React, {useState, useEffect, useRef} from 'react';
+import {StyleSheet, FlatList, SafeAreaView, RefreshControl} from 'react-native';
 import ListItem from '../components/ListItem';
 import Constants from 'expo-constants';
 import axios from 'axios';
@@ -18,22 +18,47 @@ export default HomeScreen = (props) => {
   const {navigation} = props;
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(false); 
+  const [refreshing, setRefreshing] = useState(false); 
+  const pageRef = useRef(1)
+  const fetchAllRef = useRef(false)
 
   useEffect(() => {
-    fetchArticles();
+    setLoading(true);
+    fetchArticles(1);
+    setLoading(false);
   }, []);
 
-  const fetchArticles = async () => {
-    setLoading(true);
+  const fetchArticles = async (page) => {
+
     try {
-      const response = await axios.get(URL);
-      console.log(response);
-      setArticles(response.data.articles);
+      const response = await axios.get(`${URL}&page=${page}`);
+      if (response.data.articles.length > 0) {
+      setArticles(prevArticles => [...prevArticles, ...response.data.articles]);
+      } else {
+        fetchAllRef.current = true;
+      }
+      
     } catch (error) {
       console.error(error);
     }
     setLoading(false);
   };
+
+  const onEndReached = () => {
+    if(!fetchAllRef.current) {
+      pageRef.current = pageRef.current + 1
+      fetchArticles(pageRef.current);
+    }
+  }
+
+  const onRefresh = async()=> {
+    setRefreshing(true)
+    setArticles([])
+    pageRef.current = 1
+    fetchAllRef.current = false
+    await fetchArticles(1)
+    setRefreshing(false)
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -50,6 +75,14 @@ export default HomeScreen = (props) => {
         />
       )}
       keyExtractor={(item, index) => index.toString()}
+      onEndReached={onEndReached}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+        />
+      }
+    
     />
     {loading && <Loading />}
   </SafeAreaView>
